@@ -1,0 +1,160 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --parchment: #FBF7F0;
+    --parchment-card: #FDFBF7;
+    --dusty-rose: #D8A49B;
+    --dusty-rose-light: #F3D8D6;
+    --burgundy: #722F37;
+    --burgundy-deep: #581C24;
+    --burgundy-accent: #8C3B47;
+    --brown-text: #3E2723;
+    --brown-muted: #6D5B57;
+    --sage-accent: #8A9A86;
+    --sage-light: #EBF0E9;
+    --paper-border: #E8DCCF;
+  }
+
+  body {
+    background-color: var(--parchment);
+    color: var(--brown-text);
+    font-family: 'EB Garamond', Georgia, serif;
+    background-image: 
+      radial-gradient(circle at 15% 15%, rgba(216, 164, 155, 0.08) 0%, transparent 35%),
+      radial-gradient(circle at 85% 85%, rgba(138, 154, 134, 0.08) 0%, transparent 35%),
+      radial-gradient(circle at 50% 50%, rgba(114, 47, 55, 0.03) 0%, transparent 60%);
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: 'Cormorant Garamond', 'Playfair Display', serif;
+  }
+}
+
+.font-serif-vintage {
+  font-family: 'Cormorant Garamond', Georgia, serif;
+}
+
+.font-serif-display {
+  font-family: 'Playfair Display', Georgia, serif;
+}
+
+.font-handwriting {
+  font-family: 'Caveat', 'Marck Script', cursive;
+}
+
+.font-romantic-script {
+  font-family: 'Marck Script', cursive;
+}
+
+.font-body-vintage {
+  font-family: 'EB Garamond', Georgia, serif;
+}
+
+/* Vintage Paper Card Effect */
+.vintage-card {
+  background-color: #FDFBF7;
+  border: 1px solid #EADBCC;
+  box-shadow: 0 4px 20px -2px rgba(62, 39, 35, 0.07), 0 2px 6px -1px rgba(62, 39, 35, 0.04);
+  position: relative;
+}
+
+.vintage-paper-texture {
+  background-color: #FBF7EE;
+  background-image: repeating-linear-gradient(
+    transparent,
+    transparent 27px,
+    #ECE0D2 28px
+  );
+  line-height: 28px;
+}
+
+/* Deckle Edge and Wax Seal */
+.wax-seal {
+  background: radial-gradient(circle at 35% 35%, #963F4B 0%, #722F37 50%, #4D181F 100%);
+  box-shadow: 
+    0 4px 8px rgba(77, 24, 31, 0.35),
+    inset 0 1px 1px rgba(255, 255, 255, 0.3),
+    inset 0 -2px 4px rgba(0, 0, 0, 0.4);
+  border-radius: 9999px;
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.2s ease;
+}
+
+.wax-seal:hover {
+  transform: scale(1.06) rotate(-2deg);
+  box-shadow: 
+    0 6px 12px rgba(77, 24, 31, 0.45),
+    inset 0 1px 2px rgba(255, 255, 255, 0.4);
+}
+
+.wax-seal:active {
+  transform: scale(0.95);
+}
+
+/* Postage Stamp Border Effect */
+.postage-stamp {
+  position: relative;
+  background: #FDFBF7;
+  border: 1px dashed #D8C3B0;
+  box-shadow: 0 4px 14px rgba(62, 39, 35, 0.08);
+}
+
+/* Polaroid Photo styling */
+.polaroid-frame {
+  background: #FFFFFF;
+  padding: 10px 10px 32px 10px;
+  box-shadow: 0 6px 20px rgba(62, 39, 35, 0.12);
+  border: 1px solid #ECE4DC;
+  position: relative;
+}
+
+.washi-tape {
+  position: absolute;
+  width: 70px;
+  height: 22px;
+  background: rgba(243, 216, 214, 0.85);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+  opacity: 0.9;
+  z-index: 10;
+}
+
+/* Envelope Flap animation */
+@keyframes envelope-open {
+  0% { transform: rotateX(0deg); }
+  100% { transform: rotateX(180deg); }
+}
+
+@keyframes letter-slide {
+  0% { transform: translateY(0); opacity: 0; }
+  100% { transform: translateY(-40px); opacity: 1; }
+}
+
+@keyframes gentle-pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.04); }
+}
+
+.animate-gentle-pulse {
+  animation: gentle-pulse 3s infinite ease-in-out;
+}
+
+/* Scrollbar Vintage */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: #F5EFEB;
+}
+::-webkit-scrollbar-thumb {
+  background: #D8A49B;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #722F37;
+}
