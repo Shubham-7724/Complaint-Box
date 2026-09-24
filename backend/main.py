@@ -1,32 +1,43 @@
+```python
 import os
 import shutil
 import uuid
 import random
 from datetime import datetime, date
 from pathlib import Path
-from typing import Optional, List
+from typing import Optional
 
-from fastapi import FastAPI, Depends, HTTPException, UploadFile, File, Form, Query
+from fastapi import FastAPI, Depends, HTTPException, UploadFile, File, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
+
 from database import init_db, get_db
 from auth import (
-    hash_password,
     verify_password,
     create_jwt_token,
     get_current_user
 )
 from seed import seed_data
 
-# Ensure upload directory exists
+
+# ----------------- FILE UPLOADS -----------------
+
 BASE_DIR = Path(__file__).resolve().parent
 UPLOAD_DIR = BASE_DIR / "uploads"
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
-app = FastAPI(title="Our Little Complaint Box API", version="1.0.0")
 
-# Enable CORS
+# ----------------- APP -----------------
+
+app = FastAPI(
+    title="Our Little Complaint Box API",
+    version="1.0.0"
+)
+
+
+# ----------------- CORS -----------------
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -35,11 +46,18 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Serve uploaded attachments
-app.mount("/uploads", StaticFiles(directory=str(UPLOAD_DIR)), name="uploads")
+
+# ----------------- STATIC UPLOADS -----------------
+
+app.mount(
+    "/uploads",
+    StaticFiles(directory=str(UPLOAD_DIR)),
+    name="uploads"
+)
 
 
-# Initialize and seed database on startup
+# ----------------- DATABASE STARTUP -----------------
+
 @app.on_event("startup")
 def on_startup():
     init_db()
@@ -109,14 +127,23 @@ SWEET_MESSAGES = [
 ]
 
 
-# ----------------- AUTH ENDPOINTS -----------------
+# ============================================================
+# AUTH ENDPOINTS
+# ============================================================
 
 @app.post("/api/auth/login")
-def login(req: LoginRequest, db=Depends(get_db)):
+def login(
+    req: LoginRequest,
+    db=Depends(get_db)
+):
     cursor = db.cursor()
 
     cursor.execute(
-        "SELECT * FROM users WHERE LOWER(username) = LOWER(%s)",
+        """
+        SELECT *
+        FROM users
+        WHERE LOWER(username) = LOWER(%s)
+        """,
         (req.username.strip(),)
     )
 
@@ -128,7 +155,11 @@ def login(req: LoginRequest, db=Depends(get_db)):
             detail="We couldn't find a key for this door. Check your username or password ♡"
         )
 
-    if not verify_password(req.password, user["salt"], user["password_hash"]):
+    if not verify_password(
+        req.password,
+        user["salt"],
+        user["password_hash"]
+    ):
         raise HTTPException(
             status_code=401,
             detail="Incorrect password, my love. Try again ♡"
@@ -155,16 +186,27 @@ def login(req: LoginRequest, db=Depends(get_db)):
 
 
 @app.post("/api/auth/quick-login")
-def quick_login(req: QuickLoginRequest, db=Depends(get_db)):
+def quick_login(
+    req: QuickLoginRequest,
+    db=Depends(get_db)
+):
     role = req.role.upper()
 
     if role not in ("GIRLFRIEND", "BOYFRIEND"):
-        raise HTTPException(status_code=400, detail="Invalid couple side")
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid couple side"
+        )
 
     cursor = db.cursor()
 
     cursor.execute(
-        "SELECT * FROM users WHERE role = %s LIMIT 1",
+        """
+        SELECT *
+        FROM users
+        WHERE role = %s
+        LIMIT 1
+        """,
         (role,)
     )
 
@@ -197,7 +239,10 @@ def quick_login(req: QuickLoginRequest, db=Depends(get_db)):
 
 
 @app.get("/api/auth/me")
-def get_me(current_user=Depends(get_current_user), db=Depends(get_db)):
+def get_me(
+    current_user=Depends(get_current_user),
+    db=Depends(get_db)
+):
     cursor = db.cursor()
 
     cursor.execute(
@@ -212,12 +257,17 @@ def get_me(current_user=Depends(get_current_user), db=Depends(get_db)):
     user = cursor.fetchone()
 
     if not user:
-        raise HTTPException(status_code=404, detail="User not found")
+        raise HTTPException(
+            status_code=404,
+            detail="User not found"
+        )
 
     return dict(user)
 
 
-# ----------------- COMPLAINTS ENDPOINTS -----------------
+# ============================================================
+# COMPLAINTS
+# ============================================================
 
 @app.get("/api/complaints")
 def list_complaints(
@@ -231,17 +281,37 @@ def list_complaints(
 
     query = """
     SELECT c.*,
-           u.name as author_name,
-           (SELECT COUNT(*) FROM responses r
-            WHERE r.complaint_id = c.id) as response_count,
-           (SELECT message FROM responses r
-            WHERE r.complaint_id = c.id
-            ORDER BY r.created_at DESC LIMIT 1) as latest_response,
-           (SELECT reaction FROM reactions rx
-            WHERE rx.complaint_id = c.id
-            ORDER BY rx.created_at DESC LIMIT 1) as latest_reaction,
-           (SELECT id FROM memories m
-            WHERE m.complaint_id = c.id LIMIT 1) as memory_id
+           u.name AS author_name,
+
+           (
+               SELECT COUNT(*)
+               FROM responses r
+               WHERE r.complaint_id = c.id
+           ) AS response_count,
+
+           (
+               SELECT message
+               FROM responses r
+               WHERE r.complaint_id = c.id
+               ORDER BY r.created_at DESC
+               LIMIT 1
+           ) AS latest_response,
+
+           (
+               SELECT reaction
+               FROM reactions rx
+               WHERE rx.complaint_id = c.id
+               ORDER BY rx.created_at DESC
+               LIMIT 1
+           ) AS latest_reaction,
+
+           (
+               SELECT id
+               FROM memories m
+               WHERE m.complaint_id = c.id
+               LIMIT 1
+           ) AS memory_id
+
     FROM complaints c
     JOIN users u ON c.user_id = u.id
     WHERE 1=1
@@ -254,6 +324,7 @@ def list_complaints(
         params.append(int(current_user["sub"]))
 
     if status and status != "all":
+
         if status == "in_progress":
             query += " AND c.status IN ('read', 'working')"
 
@@ -276,38 +347,45 @@ def list_complaints(
 
         query += """
         AND (
-            c.title LIKE %s
-            OR c.description LIKE %s
-            OR c.hint LIKE %s
-            OR c.wished_action LIKE %s
+            c.title ILIKE %s
+            OR c.description ILIKE %s
+            OR c.hint ILIKE %s
+            OR c.wished_action ILIKE %s
         )
         """
 
         params.extend([s, s, s, s])
 
     if sort == "oldest":
+
         query += " ORDER BY c.created_at ASC"
 
     elif sort == "most_serious":
+
         query += """
         ORDER BY
             CASE
-                WHEN c.seriousness LIKE '%We need to talk%' THEN 1
-                WHEN c.seriousness LIKE '%really bothered%' THEN 2
-                WHEN c.seriousness LIKE '%noticed%' THEN 3
+                WHEN c.seriousness ILIKE '%We need to talk%' THEN 1
+                WHEN c.seriousness ILIKE '%really bothered%' THEN 2
+                WHEN c.seriousness ILIKE '%noticed%' THEN 3
                 ELSE 4
             END ASC,
             c.created_at DESC
         """
 
     elif sort == "not_completed":
+
         query += """
         ORDER BY
-            CASE WHEN c.status = 'completed' THEN 1 ELSE 0 END ASC,
+            CASE
+                WHEN c.status = 'completed' THEN 1
+                ELSE 0
+            END ASC,
             c.created_at DESC
         """
 
     else:
+
         query += " ORDER BY c.created_at DESC"
 
     cursor.execute(query, params)
@@ -327,7 +405,9 @@ def get_complaint(
 
     cursor.execute(
         """
-        SELECT c.*, u.name as author_name, u.role as author_role
+        SELECT c.*, 
+               u.name AS author_name,
+               u.role AS author_role
         FROM complaints c
         JOIN users u ON c.user_id = u.id
         WHERE c.id = %s
@@ -345,7 +425,9 @@ def get_complaint(
 
     cursor.execute(
         """
-        SELECT r.*, u.name as responder_name, u.role as responder_role
+        SELECT r.*,
+               u.name AS responder_name,
+               u.role AS responder_role
         FROM responses r
         JOIN users u ON r.responder_id = u.id
         WHERE r.complaint_id = %s
@@ -354,11 +436,15 @@ def get_complaint(
         (complaint_id,)
     )
 
-    responses = [dict(r) for r in cursor.fetchall()]
+    responses = [
+        dict(r)
+        for r in cursor.fetchall()
+    ]
 
     cursor.execute(
         """
-        SELECT rx.*, u.name as user_name
+        SELECT rx.*,
+               u.name AS user_name
         FROM reactions rx
         JOIN users u ON rx.user_id = u.id
         WHERE rx.complaint_id = %s
@@ -367,15 +453,27 @@ def get_complaint(
         (complaint_id,)
     )
 
-    reactions = [dict(rx) for rx in cursor.fetchall()]
+    reactions = [
+        dict(rx)
+        for rx in cursor.fetchall()
+    ]
 
     cursor.execute(
-        "SELECT * FROM memories WHERE complaint_id = %s",
+        """
+        SELECT *
+        FROM memories
+        WHERE complaint_id = %s
+        """,
         (complaint_id,)
     )
 
     memory_row = cursor.fetchone()
-    memory = dict(memory_row) if memory_row else None
+
+    memory = (
+        dict(memory_row)
+        if memory_row
+        else None
+    )
 
     if (
         current_user["role"] == "BOYFRIEND"
@@ -395,7 +493,8 @@ def get_complaint(
             """
             INSERT INTO notifications
                 (user_id, complaint_id, message, type, read)
-            VALUES (%s, %s, %s, 'read', 0)
+            VALUES
+                (%s, %s, %s, 'read', 0)
             """,
             (
                 complaint["user_id"],
@@ -427,7 +526,8 @@ def create_complaint(
     cursor = db.cursor()
 
     user_id = int(current_user["sub"])
-    now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    now = datetime.now()
 
     cursor.execute(
         """
@@ -446,8 +546,9 @@ def create_complaint(
             updated_at
         )
         VALUES (
-            %s, %s, %s, %s, %s, %s,
-            %s, %s, %s, 'new', %s, %s
+            %s, %s, %s, %s, %s,
+            %s, %s, %s, %s,
+            'new', %s, %s
         )
         RETURNING id
         """,
@@ -455,21 +556,30 @@ def create_complaint(
             user_id,
             req.title.strip(),
             req.description.strip(),
-            req.wished_action.strip() if req.wished_action else None,
+            req.wished_action.strip()
+            if req.wished_action
+            else None,
             req.desired_response_type,
-            req.hint.strip() if req.hint else None,
+            req.hint.strip()
+            if req.hint
+            else None,
             req.mood,
             req.seriousness,
             req.attachment_url,
-            now_str,
-            now_str
+            now,
+            now
         )
     )
 
     complaint_id = cursor.fetchone()["id"]
 
     cursor.execute(
-        "SELECT id FROM users WHERE role = 'BOYFRIEND' LIMIT 1"
+        """
+        SELECT id
+        FROM users
+        WHERE role = 'BOYFRIEND'
+        LIMIT 1
+        """
     )
 
     bf_user = cursor.fetchone()
@@ -477,8 +587,13 @@ def create_complaint(
     if bf_user:
         cursor.execute(
             """
-            INSERT INTO notifications
-                (user_id, complaint_id, message, type, read)
+            INSERT INTO notifications (
+                user_id,
+                complaint_id,
+                message,
+                type,
+                read
+            )
             VALUES (%s, %s, %s, 'new_note', 0)
             """,
             (
@@ -503,23 +618,38 @@ def update_status(
     current_user=Depends(get_current_user),
     db=Depends(get_db)
 ):
-    if req.status not in ("read", "working", "completed", "new"):
-        raise HTTPException(status_code=400, detail="Invalid status")
+    if req.status not in (
+        "read",
+        "working",
+        "completed",
+        "new"
+    ):
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid status"
+        )
 
     cursor = db.cursor()
 
     cursor.execute(
-        "SELECT * FROM complaints WHERE id = %s",
+        """
+        SELECT *
+        FROM complaints
+        WHERE id = %s
+        """,
         (complaint_id,)
     )
 
     complaint = cursor.fetchone()
 
     if not complaint:
-        raise HTTPException(status_code=404, detail="Note not found")
+        raise HTTPException(
+            status_code=404,
+            detail="Note not found"
+        )
 
     completed_at = (
-        datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        datetime.now()
         if req.status == "completed"
         else None
     )
@@ -532,20 +662,35 @@ def update_status(
             completed_at = COALESCE(%s, completed_at)
         WHERE id = %s
         """,
-        (req.status, completed_at, complaint_id)
+        (
+            req.status,
+            completed_at,
+            complaint_id
+        )
     )
 
     status_messages = {
-        "read": f"💌 He read your note: '{complaint['title']}'",
-        "working": f"🫶 He's working on your note: '{complaint['title']}'",
-        "completed": f"✨ Someone just checked something off: '{complaint['title']}'!"
+        "read":
+            f"💌 He read your note: '{complaint['title']}'",
+
+        "working":
+            f"🫶 He's working on your note: '{complaint['title']}'",
+
+        "completed":
+            f"✨ Someone just checked something off: '{complaint['title']}'!"
     }
 
     if req.status in status_messages:
+
         cursor.execute(
             """
-            INSERT INTO notifications
-                (user_id, complaint_id, message, type, read)
+            INSERT INTO notifications (
+                user_id,
+                complaint_id,
+                message,
+                type,
+                read
+            )
             VALUES (%s, %s, %s, %s, 0)
             """,
             (
@@ -564,7 +709,9 @@ def update_status(
     }
 
 
-# ----------------- RESPONSES & REACTIONS -----------------
+# ============================================================
+# RESPONSES & REACTIONS
+# ============================================================
 
 @app.post("/api/complaints/{complaint_id}/responses")
 def create_response(
@@ -576,21 +723,31 @@ def create_response(
     cursor = db.cursor()
 
     cursor.execute(
-        "SELECT * FROM complaints WHERE id = %s",
+        """
+        SELECT *
+        FROM complaints
+        WHERE id = %s
+        """,
         (complaint_id,)
     )
 
     complaint = cursor.fetchone()
 
     if not complaint:
-        raise HTTPException(status_code=404, detail="Note not found")
+        raise HTTPException(
+            status_code=404,
+            detail="Note not found"
+        )
 
     user_id = int(current_user["sub"])
 
     cursor.execute(
         """
-        INSERT INTO responses
-            (complaint_id, responder_id, message)
+        INSERT INTO responses (
+            complaint_id,
+            responder_id,
+            message
+        )
         VALUES (%s, %s, %s)
         RETURNING id
         """,
@@ -604,6 +761,7 @@ def create_response(
     response_id = cursor.fetchone()["id"]
 
     if complaint["status"] == "new":
+
         cursor.execute(
             """
             UPDATE complaints
@@ -615,10 +773,16 @@ def create_response(
         )
 
     if complaint["user_id"] != user_id:
+
         cursor.execute(
             """
-            INSERT INTO notifications
-                (user_id, complaint_id, message, type, read)
+            INSERT INTO notifications (
+                user_id,
+                complaint_id,
+                message,
+                type,
+                read
+            )
             VALUES (%s, %s, %s, 'response_received', 0)
             """,
             (
@@ -647,21 +811,31 @@ def set_reaction(
     cursor = db.cursor()
 
     cursor.execute(
-        "SELECT * FROM complaints WHERE id = %s",
+        """
+        SELECT *
+        FROM complaints
+        WHERE id = %s
+        """,
         (complaint_id,)
     )
 
     complaint = cursor.fetchone()
 
     if not complaint:
-        raise HTTPException(status_code=404, detail="Note not found")
+        raise HTTPException(
+            status_code=404,
+            detail="Note not found"
+        )
 
     user_id = int(current_user["sub"])
 
     cursor.execute(
         """
-        INSERT INTO reactions
-            (complaint_id, user_id, reaction)
+        INSERT INTO reactions (
+            complaint_id,
+            user_id,
+            reaction
+        )
         VALUES (%s, %s, %s)
         ON CONFLICT (complaint_id, user_id)
         DO UPDATE SET
@@ -676,17 +850,29 @@ def set_reaction(
     )
 
     if current_user["role"] == "GIRLFRIEND":
+
         cursor.execute(
-            "SELECT id FROM users WHERE role = 'BOYFRIEND' LIMIT 1"
+            """
+            SELECT id
+            FROM users
+            WHERE role = 'BOYFRIEND'
+            LIMIT 1
+            """
         )
 
         bf_user = cursor.fetchone()
 
         if bf_user:
+
             cursor.execute(
                 """
-                INSERT INTO notifications
-                    (user_id, complaint_id, message, type, read)
+                INSERT INTO notifications (
+                    user_id,
+                    complaint_id,
+                    message,
+                    type,
+                    read
+                )
                 VALUES (%s, %s, %s, 'reaction', 0)
                 """,
                 (
@@ -704,31 +890,45 @@ def set_reaction(
     }
 
 
-# ----------------- MEMORIES POSTCARDS -----------------
+# ============================================================
+# MEMORIES
+# ============================================================
 
 @app.get("/api/memories")
-def get_memories(db=Depends(get_db)):
+def get_memories(
+    db=Depends(get_db)
+):
     cursor = db.cursor()
 
     cursor.execute(
         """
         SELECT m.*,
-               c.title as complaint_title,
-               c.description as complaint_desc,
-               c.mood as complaint_mood,
+               c.title AS complaint_title,
+               c.description AS complaint_desc,
+               c.mood AS complaint_mood,
                c.completed_at,
-               (SELECT message
-                FROM responses r
-                WHERE r.complaint_id = c.id
-                ORDER BY r.created_at DESC
-                LIMIT 1) as final_response,
-               (SELECT reaction
-                FROM reactions rx
-                WHERE rx.complaint_id = c.id
-                ORDER BY rx.created_at DESC
-                LIMIT 1) as reaction
+
+               (
+                   SELECT message
+                   FROM responses r
+                   WHERE r.complaint_id = c.id
+                   ORDER BY r.created_at DESC
+                   LIMIT 1
+               ) AS final_response,
+
+               (
+                   SELECT reaction
+                   FROM reactions rx
+                   WHERE rx.complaint_id = c.id
+                   ORDER BY rx.created_at DESC
+                   LIMIT 1
+               ) AS reaction
+
         FROM memories m
-        LEFT JOIN complaints c ON m.complaint_id = c.id
+
+        LEFT JOIN complaints c
+            ON m.complaint_id = c.id
+
         ORDER BY m.created_at DESC
         """
     )
@@ -748,23 +948,35 @@ def add_memory(
     cursor = db.cursor()
 
     cursor.execute(
-        "SELECT * FROM complaints WHERE id = %s",
+        """
+        SELECT *
+        FROM complaints
+        WHERE id = %s
+        """,
         (complaint_id,)
     )
 
     complaint = cursor.fetchone()
 
     if not complaint:
-        raise HTTPException(status_code=404, detail="Note not found")
+        raise HTTPException(
+            status_code=404,
+            detail="Note not found"
+        )
 
     cursor.execute(
-        "SELECT id FROM memories WHERE complaint_id = %s",
+        """
+        SELECT id
+        FROM memories
+        WHERE complaint_id = %s
+        """,
         (complaint_id,)
     )
 
     existing = cursor.fetchone()
 
     if existing:
+
         cursor.execute(
             """
             UPDATE memories
@@ -784,10 +996,15 @@ def add_memory(
         mem_id = existing["id"]
 
     else:
+
         cursor.execute(
             """
-            INSERT INTO memories
-                (complaint_id, title, description, image_url)
+            INSERT INTO memories (
+                complaint_id,
+                title,
+                description,
+                image_url
+            )
             VALUES (%s, %s, %s, %s)
             RETURNING id
             """,
@@ -809,18 +1026,30 @@ def add_memory(
     }
 
 
-# ----------------- OUR LITTLE CORNER & STATS -----------------
+# ============================================================
+# OUR LITTLE CORNER & STATS
+# ============================================================
 
 @app.get("/api/corner/stats")
-def get_stats(db=Depends(get_db)):
+def get_stats(
+    db=Depends(get_db)
+):
     cursor = db.cursor()
 
-    cursor.execute("SELECT COUNT(*) FROM complaints")
+    cursor.execute(
+        "SELECT COUNT(*) FROM complaints"
+    )
+
     total_requests = cursor.fetchone()[0]
 
     cursor.execute(
-        "SELECT COUNT(*) FROM complaints WHERE status = 'new'"
+        """
+        SELECT COUNT(*)
+        FROM complaints
+        WHERE status = 'new'
+        """
     )
+
     new_notes = cursor.fetchone()[0]
 
     cursor.execute(
@@ -830,18 +1059,31 @@ def get_stats(db=Depends(get_db)):
         WHERE status IN ('read', 'working')
         """
     )
+
     in_progress = cursor.fetchone()[0]
 
     cursor.execute(
-        "SELECT COUNT(*) FROM complaints WHERE status = 'completed'"
+        """
+        SELECT COUNT(*)
+        FROM complaints
+        WHERE status = 'completed'
+        """
     )
+
     completed = cursor.fetchone()[0]
 
-    cursor.execute("SELECT COUNT(*) FROM memories")
+    cursor.execute(
+        "SELECT COUNT(*) FROM memories"
+    )
+
     total_memories = cursor.fetchone()[0]
 
     cursor.execute(
-        "SELECT value FROM couple_meta WHERE key = 'anniversary'"
+        """
+        SELECT value
+        FROM couple_meta
+        WHERE key = 'anniversary'
+        """
     )
 
     row = cursor.fetchone()
@@ -849,9 +1091,10 @@ def get_stats(db=Depends(get_db)):
     days_together = 365
 
     if row and row["value"]:
+
         try:
             anni_date = datetime.strptime(
-                row["value"],
+                str(row["value"]),
                 "%Y-%m-%d"
             ).date()
 
@@ -878,7 +1121,9 @@ def get_stats(db=Depends(get_db)):
     }
 
 
-# ----------------- NOTIFICATIONS -----------------
+# ============================================================
+# NOTIFICATIONS
+# ============================================================
 
 @app.get("/api/notifications")
 def get_notifications(
@@ -906,7 +1151,8 @@ def get_notifications(
         """
         SELECT COUNT(*)
         FROM notifications
-        WHERE user_id = %s AND read = 0
+        WHERE user_id = %s
+          AND read = 0
         """,
         (user_id,)
     )
@@ -932,7 +1178,7 @@ def mark_read(
         UPDATE notifications
         SET read = 1
         WHERE id = %s
-        AND user_id = %s
+          AND user_id = %s
         """,
         (
             notif_id,
@@ -942,7 +1188,9 @@ def mark_read(
 
     db.commit()
 
-    return {"success": True}
+    return {
+        "success": True
+    }
 
 
 @app.post("/api/notifications/read-all")
@@ -963,10 +1211,14 @@ def mark_all_read(
 
     db.commit()
 
-    return {"success": True}
+    return {
+        "success": True
+    }
 
 
-# ----------------- FILE UPLOADS -----------------
+# ============================================================
+# FILE UPLOADS
+# ============================================================
 
 @app.post("/api/upload")
 async def upload_attachment(
@@ -974,7 +1226,13 @@ async def upload_attachment(
 ):
     ext = Path(file.filename).suffix.lower()
 
-    if ext not in [".jpg", ".jpeg", ".png", ".webp", ".gif"]:
+    if ext not in [
+        ".jpg",
+        ".jpeg",
+        ".png",
+        ".webp",
+        ".gif"
+    ]:
         raise HTTPException(
             status_code=400,
             detail="Only romantic photo attachments (jpg, png, webp, gif) are supported ♡"
@@ -985,7 +1243,10 @@ async def upload_attachment(
     dest_path = UPLOAD_DIR / unique_filename
 
     with open(dest_path, "wb") as buffer:
-        shutil.copyfileobj(file.file, buffer)
+        shutil.copyfileobj(
+            file.file,
+            buffer
+        )
 
     return {
         "url": f"/uploads/{unique_filename}",
@@ -993,7 +1254,9 @@ async def upload_attachment(
     }
 
 
-# ----------------- EASTER EGGS -----------------
+# ============================================================
+# EASTER EGGS
+# ============================================================
 
 @app.get("/api/easter-eggs/quote")
 def get_random_quote():
@@ -1003,14 +1266,18 @@ def get_random_quote():
     }
 
 
-# ----------------- SERVE STATIC FRONTEND DIST IF BUILT -----------------
+# ============================================================
+# SERVE FRONTEND IF DIST EXISTS
+# ============================================================
 
 FRONTEND_DIST = BASE_DIR.parent / "frontend" / "dist"
 
 if FRONTEND_DIST.exists():
+
     assets_dir = FRONTEND_DIST / "assets"
 
     if assets_dir.exists():
+
         app.mount(
             "/assets",
             StaticFiles(directory=str(assets_dir)),
@@ -1021,6 +1288,7 @@ if FRONTEND_DIST.exists():
 
     @app.get("/{full_path:path}")
     def serve_frontend(full_path: str):
+
         if (
             full_path.startswith("api")
             or full_path.startswith("uploads")
@@ -1040,6 +1308,10 @@ if FRONTEND_DIST.exists():
         )
 
 
+# ============================================================
+# LOCAL DEVELOPMENT
+# ============================================================
+
 if __name__ == "__main__":
     import uvicorn
 
@@ -1049,3 +1321,4 @@ if __name__ == "__main__":
         port=8000,
         reload=True
     )
+```
