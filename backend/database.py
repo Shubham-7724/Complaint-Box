@@ -1,23 +1,33 @@
-import sqlite3
-from pathlib import Path
+import os
+import psycopg2
+from psycopg2.extras import DictCursor
 from contextlib import contextmanager
 
-DB_PATH = Path(__file__).resolve().parent / "complaint_box.db"
+
+DATABASE_URL = os.getenv("DATABASE_URL")
+
+
+def get_connection():
+    if not DATABASE_URL:
+        raise RuntimeError("DATABASE_URL environment variable is not set")
+
+    return psycopg2.connect(
+        DATABASE_URL,
+        cursor_factory=DictCursor
+    )
+
 
 def get_db():
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA foreign_keys = ON;")
+    conn = get_connection()
     try:
         yield conn
     finally:
         conn.close()
 
+
 @contextmanager
 def db_context():
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA foreign_keys = ON;")
+    conn = get_connection()
     try:
         yield conn
         conn.commit()
@@ -27,14 +37,15 @@ def db_context():
     finally:
         conn.close()
 
+
 def init_db():
     with db_context() as conn:
         cursor = conn.cursor()
-        
+
         # Users Table
         cursor.execute("""
         CREATE TABLE IF NOT EXISTS users (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id SERIAL PRIMARY KEY,
             name TEXT NOT NULL,
             username TEXT UNIQUE NOT NULL,
             password_hash TEXT NOT NULL,
@@ -48,7 +59,7 @@ def init_db():
         # Complaints Table
         cursor.execute("""
         CREATE TABLE IF NOT EXISTS complaints (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id SERIAL PRIMARY KEY,
             user_id INTEGER NOT NULL REFERENCES users(id),
             title TEXT NOT NULL,
             description TEXT NOT NULL,
@@ -58,7 +69,8 @@ def init_db():
             mood TEXT NOT NULL,
             seriousness TEXT NOT NULL,
             attachment_url TEXT,
-            status TEXT NOT NULL DEFAULT 'new' CHECK(status IN ('new', 'read', 'working', 'completed')),
+            status TEXT NOT NULL DEFAULT 'new'
+                CHECK(status IN ('new', 'read', 'working', 'completed')),
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             completed_at TIMESTAMP
@@ -68,8 +80,9 @@ def init_db():
         # Responses Table
         cursor.execute("""
         CREATE TABLE IF NOT EXISTS responses (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            complaint_id INTEGER NOT NULL REFERENCES complaints(id) ON DELETE CASCADE,
+            id SERIAL PRIMARY KEY,
+            complaint_id INTEGER NOT NULL
+                REFERENCES complaints(id) ON DELETE CASCADE,
             responder_id INTEGER NOT NULL REFERENCES users(id),
             message TEXT NOT NULL,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -79,8 +92,9 @@ def init_db():
         # Reactions Table
         cursor.execute("""
         CREATE TABLE IF NOT EXISTS reactions (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            complaint_id INTEGER NOT NULL REFERENCES complaints(id) ON DELETE CASCADE,
+            id SERIAL PRIMARY KEY,
+            complaint_id INTEGER NOT NULL
+                REFERENCES complaints(id) ON DELETE CASCADE,
             user_id INTEGER NOT NULL REFERENCES users(id),
             reaction TEXT NOT NULL,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -91,8 +105,9 @@ def init_db():
         # Memories Table
         cursor.execute("""
         CREATE TABLE IF NOT EXISTS memories (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            complaint_id INTEGER REFERENCES complaints(id) ON DELETE SET NULL,
+            id SERIAL PRIMARY KEY,
+            complaint_id INTEGER
+                REFERENCES complaints(id) ON DELETE SET NULL,
             title TEXT NOT NULL,
             description TEXT,
             image_url TEXT,
@@ -103,9 +118,10 @@ def init_db():
         # Notifications Table
         cursor.execute("""
         CREATE TABLE IF NOT EXISTS notifications (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id SERIAL PRIMARY KEY,
             user_id INTEGER NOT NULL REFERENCES users(id),
-            complaint_id INTEGER REFERENCES complaints(id) ON DELETE CASCADE,
+            complaint_id INTEGER
+                REFERENCES complaints(id) ON DELETE CASCADE,
             message TEXT NOT NULL,
             type TEXT NOT NULL,
             read INTEGER NOT NULL DEFAULT 0,
@@ -120,11 +136,13 @@ def init_db():
             value TEXT NOT NULL
         );
         """)
-        
-        # Insert default anniversary if not exists
+
+        # Default couple information
         cursor.execute("""
-        INSERT OR IGNORE INTO couple_meta (key, value)
-        VALUES ('anniversary', '2024-06-14'),
-               ('girlfriend_nickname', 'My Little Sunshine ♡'),
-               ('boyfriend_nickname', 'My Favorite Person ♡');
+        INSERT INTO couple_meta (key, value)
+        VALUES
+            ('anniversary', '2024-06-14'),
+            ('girlfriend_nickname', 'My Little Sunshine ♡'),
+            ('boyfriend_nickname', 'My Favorite Person ♡')
+        ON CONFLICT (key) DO NOTHING;
         """)
