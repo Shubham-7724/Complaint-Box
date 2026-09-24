@@ -111,3 +111,20 @@ cd frontend
 npm run dev
 ```
 Open **`http://127.0.0.1:5173`** in your browser. (All `/api` and `/uploads` requests automatically proxy to the FastAPI backend).
+
+---
+
+## ☁️ Deploying to Render as ONE Web Service
+
+This project is configured with a multi-stage `Dockerfile` that builds the React frontend with Node and bundles it into the FastAPI Python container.
+
+### Step-by-Step on Render:
+1. Push this repository to GitHub or GitLab.
+2. In the [Render Dashboard](https://dashboard.render.com), click **New +** → **Web Service**.
+3. Connect your repository.
+4. Select **Docker** as the Environment / Runtime.
+5. In **Environment Variables**, you can optionally add:
+   - `JWT_SECRET`: (Set to any random secret string, or let Render generate one).
+6. Click **Deploy Web Service**!
+   - Render will build the frontend with Node.js, install Python dependencies, start Uvicorn on `$PORT`, and serve both your API and beautiful UI on your custom Render URL!
+

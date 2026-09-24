@@ -1,0 +1,31 @@
+# Version control
+.git
+.gitignore
+
+# Node dependencies and build artifacts
+**/node_modules
+frontend/dist
+.npm
+
+# Python artifacts and virtual environments
+**/__pycache__
+**/*.pyc
+**/*.pyo
+**/*.pyd
+.Python
+**/.venv
+**/venv
+**/env
+ENV/
+build/
+dist/
+*.egg-info/
+
+# Local databases and tests
+backend/test_api.py
+
+# System and IDE files
+.DS_Store
+Thumbs.db
+.vscode
+.idea

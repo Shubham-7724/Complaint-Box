@@ -1,0 +1,10 @@
+services:
+  - type: web
+    name: our-little-complaint-box
+    env: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    autoDeploy: true
+    envVars:
+      - key: JWT_SECRET
+        generateValue: true
